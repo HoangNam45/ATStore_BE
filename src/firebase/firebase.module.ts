@@ -2,6 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { FirebaseService } from './firebase.service';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -11,6 +12,7 @@ const firebaseApp = admin.initializeApp({
     privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
   }),
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
 });
 
 @Global()
@@ -20,7 +22,8 @@ const firebaseApp = admin.initializeApp({
       provide: 'FIREBASE_APP',
       useValue: firebaseApp,
     },
+    FirebaseService,
   ],
-  exports: ['FIREBASE_APP'],
+  exports: ['FIREBASE_APP', FirebaseService],
 })
 export class FirebaseModule {}

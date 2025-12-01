@@ -4,10 +4,11 @@ import { AppService } from './app.service';
 import { FirebaseModule } from './firebase/firebase.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
+import { AccountModule } from './account/account.module';
 import { MorganMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
-  imports: [FirebaseModule, RedisModule, AuthModule],
+  imports: [FirebaseModule, RedisModule, AuthModule, AccountModule],
   controllers: [AppController],
   providers: [AppService],
 })

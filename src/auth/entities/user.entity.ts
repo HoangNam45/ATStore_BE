@@ -8,8 +8,7 @@ export interface User {
   email: string;
   displayName: string;
   photoURL?: string;
-  role: UserRole;
-  provider: 'email' | 'google' | 'facebook';
+  providers: Array<'email' | 'google' | 'facebook'>; // Multiple providers support
   emailVerified: boolean;
   createdAt: Date;
   updatedAt: Date;

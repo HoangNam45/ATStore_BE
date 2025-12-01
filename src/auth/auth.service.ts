@@ -12,71 +12,22 @@ import { VerifyEmailDto } from './dto/VerifyEmailDto';
 import { LoginDto } from './dto/LoginDto';
 import { SocialLoginDto } from './dto/SocialLoginDto';
 import { EmailService } from '../email/email.service';
-import { User, UserRole } from './entities/user.entity';
+import { FirebaseService } from '../firebase/firebase.service';
 
 @Injectable()
 export class AuthService {
-  private firestore: admin.firestore.Firestore;
-
   constructor(
     @Inject('FIREBASE_APP') private firebaseApp: admin.app.App,
     @Inject('REDIS_CLIENT') private redisClient: Redis,
     private emailService: EmailService,
-  ) {
-    this.firestore = this.firebaseApp.firestore();
-  }
+    private firebaseService: FirebaseService,
+  ) {}
 
   //  Generate a 6-digit OTP code
   private generateOtp(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  /**
-   * Get or create user document in Firestore
-   */
-  private async getOrCreateUser(
-    uid: string,
-    email: string,
-    displayName: string,
-    provider: 'email' | 'google' | 'facebook',
-    photoURL?: string,
-  ): Promise<User> {
-    const userRef = this.firestore.collection('users').doc(uid);
-    const userDoc = await userRef.get();
-
-    if (userDoc.exists) {
-      // Update last login
-      await userRef.update({
-        lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      return userDoc.data() as User;
-    } else {
-      // Create new user document
-      const newUser: any = {
-        uid,
-        email,
-        displayName,
-        role: UserRole.USER, // Default role is USER
-        provider,
-        emailVerified: provider !== 'email', // Social logins are auto-verified
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
-      };
-
-      // Only add photoURL if it exists
-      if (photoURL) {
-        newUser.photoURL = photoURL;
-      }
-
-      await userRef.set(newUser);
-
-      // Return user with current timestamps
-      const createdDoc = await userRef.get();
-      return createdDoc.data() as User;
-    }
-  }
   async signUp(dto: SignUpDto) {
     const { email, password, user_name } = dto;
     try {
@@ -152,7 +103,7 @@ export class AuthService {
       });
 
       // Create user document in Firestore
-      await this.getOrCreateUser(
+      await this.firebaseService.getOrCreateUser(
         user.uid,
         user.email!,
         user.displayName || 'User',
@@ -206,7 +157,7 @@ export class AuthService {
       // This endpoint is for creating/updating user in Firestore after successful client-side auth
 
       // Get or create user in Firestore
-      const userData = await this.getOrCreateUser(
+      const userData = await this.firebaseService.getOrCreateUser(
         user.uid,
         user.email!,
         user.displayName || 'User',
@@ -249,7 +200,7 @@ export class AuthService {
       const user = await this.firebaseApp.auth().getUser(decodedToken.uid);
 
       // Get or create user in Firestore
-      const userData = await this.getOrCreateUser(
+      const userData = await this.firebaseService.getOrCreateUser(
         user.uid,
         user.email!,
         user.displayName || dto.displayName || 'User',
