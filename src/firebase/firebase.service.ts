@@ -5,9 +5,11 @@ import { User } from '../auth/entities/user.entity';
 @Injectable()
 export class FirebaseService {
   private firestore: admin.firestore.Firestore;
+  private storage: admin.storage.Storage;
 
   constructor(@Inject('FIREBASE_APP') private firebaseApp: admin.app.App) {
     this.firestore = this.firebaseApp.firestore();
+    this.storage = this.firebaseApp.storage();
   }
 
   /**
@@ -164,5 +166,36 @@ export class FirebaseService {
    */
   async deleteUser(uid: string): Promise<void> {
     await this.firestore.collection('users').doc(uid).delete();
+  }
+
+  /**
+   * Upload file to Firebase Storage and return public URL
+   */
+  async uploadImage(
+    file: Express.Multer.File,
+    folder: string,
+  ): Promise<string> {
+    const bucket = this.storage.bucket();
+    const fileName = `${folder}/${Date.now()}_${file.originalname}`;
+    const fileUpload = bucket.file(fileName);
+
+    await fileUpload.save(file.buffer, {
+      metadata: {
+        contentType: file.mimetype,
+      },
+    });
+
+    // Make file publicly accessible
+    await fileUpload.makePublic();
+
+    // Return public URL
+    return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+  }
+
+  /**
+   * Get Firestore instance
+   */
+  getFirestore(): admin.firestore.Firestore {
+    return this.firestore;
   }
 }

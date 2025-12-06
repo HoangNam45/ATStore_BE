@@ -1,22 +1,25 @@
 import {
   Controller,
   Post,
+  Get,
+  Param,
   UseGuards,
   UseInterceptors,
   UploadedFiles,
   Body,
   BadRequestException,
+  Request,
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { FirebaseAuthGuard } from '../common/guards/firebase-auth.guard';
 import { AccountService } from './account.service';
 
 @Controller('account')
-@UseGuards(FirebaseAuthGuard)
 export class AccountController {
   constructor(private readonly accountService: AccountService) {}
 
   @Post('create')
+  @UseGuards(FirebaseAuthGuard)
   @UseInterceptors(
     FileFieldsInterceptor([
       { name: 'displayImage', maxCount: 1 },
@@ -24,45 +27,142 @@ export class AccountController {
     ]),
   )
   async createAccount(
+    @Request() req: any,
     @UploadedFiles()
     files: {
       displayImage?: Express.Multer.File[];
       detailImages?: Express.Multer.File[];
     },
-    @Body() body: any,
+    @Body() body: any, // Use any to skip validation, we'll validate manually
   ) {
     // Validate display image
     if (!files?.displayImage || files.displayImage.length === 0) {
       throw new BadRequestException('Display image is required');
     }
 
-    // Parse categories from JSON string
-    let categories;
-    try {
-      categories = JSON.parse(body.categories);
-    } catch {
-      throw new BadRequestException('Invalid categories format');
-    }
-
     // Validate required fields
-    if (!body.game || !body.type) {
-      throw new BadRequestException('Game and type are required');
+    if (!body.game || typeof body.game !== 'string') {
+      throw new BadRequestException('game is required and must be a string');
+    }
+    if (!body.type || typeof body.type !== 'string') {
+      throw new BadRequestException('type is required and must be a string');
     }
 
-    if (!categories || !Array.isArray(categories) || categories.length === 0) {
-      throw new BadRequestException('At least one category is required');
+    // Parse categories from JSON string if it comes as string
+    let categories = body.categories;
+    if (typeof body.categories === 'string') {
+      try {
+        categories = JSON.parse(body.categories);
+      } catch {
+        throw new BadRequestException('Invalid categories format');
+      }
+    }
+
+    // Validate categories
+    if (!Array.isArray(categories) || categories.length === 0) {
+      throw new BadRequestException(
+        'categories must be an array with at least 1 element',
+      );
     }
 
     // Create account
-    const result = await this.accountService.createAccount({
-      game: body.game,
-      server: body.server,
-      type: body.type,
-      displayImage: files.displayImage[0],
-      detailImages: files.detailImages || [],
-      categories,
-    });
+    const result = await this.accountService.createAccount(
+      {
+        game: body.game,
+        server: body.server,
+        type: body.type,
+        categories,
+        displayImage: files.displayImage[0],
+        detailImages: files.detailImages || [],
+      },
+      req.user.uid,
+    );
 
+    return result;
+  }
+
+  @Get('owner/all')
+  @UseGuards(FirebaseAuthGuard)
+  async getOwnerAccounts(@Request() req: any) {
+    const userId = req.user.uid;
+    const accounts = await this.accountService.getAccountsByOwner(userId);
+    return accounts;
+  }
+
+  @Get('game/:game')
+  async getAccountsByGame(@Param('game') game: string) {
+    const accounts = await this.accountService.getAccountsByGame(game);
+    return accounts;
+  }
+
+  @Get(':id')
+  async getAccountById(@Param('id') id: string) {
+    const account = await this.accountService.getAccountById(id);
+    if (!account) {
+      throw new BadRequestException('Account not found');
+    }
+    return account;
+  }
+
+  @Post('list/update')
+  @UseGuards(FirebaseAuthGuard)
+  async updateListName(
+    @Request() req: any,
+    @Body() body: { listId: string; type: string },
+  ) {
+    const result = await this.accountService.updateListType(
+      body.listId,
+      body.type,
+      req.user.uid,
+    );
+    return result;
+  }
+
+  @Post('category/update')
+  @UseGuards(FirebaseAuthGuard)
+  async updateCategory(
+    @Request() req: any,
+    @Body()
+    body: {
+      listId: string;
+      categoryId: string;
+      name: string;
+      price: number;
+    },
+  ) {
+    const result = await this.accountService.updateCategory(
+      body.listId,
+      body.categoryId,
+      body.name,
+      body.price,
+      req.user.uid,
+    );
+    return result;
+  }
+
+  @Post('account/update')
+  @UseGuards(FirebaseAuthGuard)
+  async updateAccount(
+    @Request() req: any,
+    @Body()
+    body: {
+      listId: string;
+      categoryId: string;
+      accountId: string;
+      username: string;
+      password: string;
+      status: 'available' | 'sold';
+    },
+  ) {
+    const result = await this.accountService.updateAccountCredentials(
+      body.listId,
+      body.categoryId,
+      body.accountId,
+      body.username,
+      body.password,
+      body.status,
+      req.user.uid,
+    );
     return result;
   }
 }
