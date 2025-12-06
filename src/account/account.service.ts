@@ -269,17 +269,19 @@ export class AccountService {
     }
 
     const data = doc.data();
-    const categories = data?.categories || [];
+    const categories: Array<{
+      name: string;
+      price: number;
+      accounts?: Array<unknown>;
+    }> = data?.categories || [];
 
-    const updatedCategories = categories.map(
-      (cat: { name: string; price: number }) => {
-        const catId = `${listId}_${cat.name}`;
-        if (catId === categoryId) {
-          return { ...cat, name, price };
-        }
-        return cat;
-      },
-    );
+    const updatedCategories = categories.map((cat) => {
+      const catId = `${listId}_${cat.name}`;
+      if (catId === categoryId) {
+        return { ...cat, name, price };
+      }
+      return cat;
+    });
 
     await docRef.update({
       categories: updatedCategories,
@@ -306,41 +308,40 @@ export class AccountService {
     }
 
     const data = doc.data();
-    const categories = data?.categories || [];
+    const categories: Array<{
+      name: string;
+      price?: number;
+      accounts: Array<{
+        username: string;
+        password: string;
+        status?: string;
+      }>;
+    }> = data?.categories || [];
 
     // Extract category name from categoryId
     const categoryName = categoryId.split('_').slice(1).join('_');
     // Extract account index from accountId
     const accountIndex = parseInt(accountId.split('_').pop() || '0');
 
-    const updatedCategories = categories.map(
-      (cat: {
-        name: string;
-        accounts: Array<{
-          username: string;
-          password: string;
-          status?: string;
-        }>;
-      }) => {
-        if (cat.name === categoryName) {
-          const updatedAccounts = [...cat.accounts];
-          if (updatedAccounts[accountIndex]) {
-            // Encrypt new credentials
-            const encrypted = this.encryptionService.encryptCredentials(
-              username,
-              password,
-            );
-            updatedAccounts[accountIndex] = {
-              username: encrypted.username,
-              password: encrypted.password,
-              status: status,
-            };
-          }
-          return { ...cat, accounts: updatedAccounts };
+    const updatedCategories = categories.map((cat) => {
+      if (cat.name === categoryName) {
+        const updatedAccounts = [...cat.accounts];
+        if (updatedAccounts[accountIndex]) {
+          // Encrypt new credentials
+          const encrypted = this.encryptionService.encryptCredentials(
+            username,
+            password,
+          );
+          updatedAccounts[accountIndex] = {
+            username: encrypted.username,
+            password: encrypted.password,
+            status: status,
+          };
         }
-        return cat;
-      },
-    );
+        return { ...cat, accounts: updatedAccounts };
+      }
+      return cat;
+    });
 
     await docRef.update({
       categories: updatedCategories,
@@ -364,5 +365,74 @@ export class AccountService {
     return (
       slugMap[gameName] || gameName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
     );
+  }
+
+  /**
+   * Get oldest available account from category and mark as sold
+   */
+  async getAndMarkAccountAsSold(
+    accountId: string,
+    categoryName: string,
+  ): Promise<{ username: string; password: string } | null> {
+    const docRef = this.firestore.collection('accounts').doc(accountId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    const data = doc.data();
+    const categories: Array<{
+      name: string;
+      accounts: Array<{
+        username: string;
+        password: string;
+        status?: string;
+      }>;
+    }> = data?.categories || [];
+
+    // Find the category
+    const categoryIndex = categories.findIndex(
+      (cat) => cat.name === categoryName,
+    );
+
+    if (categoryIndex === -1) {
+      return null;
+    }
+
+    const category = categories[categoryIndex];
+
+    // Find the first available account (oldest)
+    const accountIndex = category.accounts.findIndex(
+      (acc) => !acc.status || acc.status === 'available',
+    );
+
+    if (accountIndex === -1) {
+      return null;
+    }
+
+    const account = category.accounts[accountIndex];
+
+    // Decrypt credentials
+    const decrypted = this.encryptionService.decryptCredentials(
+      account.username,
+      account.password,
+    );
+
+    // Update account status to sold
+    const updatedCategories = [...categories];
+    updatedCategories[categoryIndex] = {
+      ...category,
+      accounts: category.accounts.map((acc, idx) =>
+        idx === accountIndex ? { ...acc, status: 'sold' } : acc,
+      ),
+    };
+
+    await docRef.update({
+      categories: updatedCategories,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return decrypted;
   }
 }

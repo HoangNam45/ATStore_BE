@@ -19,7 +19,10 @@ async function bootstrap() {
   );
   app.use(helmet());
   app.enableCors({
-    origin: [`${process.env.FRONTEND_URL}`],
+    origin: [
+      `${process.env.FRONTEND_URL}`,
+      'https://aryan-tufaceous-coquettishly.ngrok-free.dev',
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -27,4 +30,4 @@ async function bootstrap() {
   });
   await app.listen(process.env.PORT ?? 3000);
 }
-bootstrap();
+void bootstrap();

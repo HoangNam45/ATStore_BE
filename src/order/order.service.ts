@@ -6,6 +6,8 @@ import {
 import { FirebaseService } from '../firebase/firebase.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Order } from './entities/order.entity';
+import { AccountService } from '../account/account.service';
+import { EmailService } from '../email/email.service';
 
 interface BankInfo {
   accountNo: string;
@@ -14,7 +16,11 @@ interface BankInfo {
 
 @Injectable()
 export class OrderService {
-  constructor(private readonly firebaseService: FirebaseService) {}
+  constructor(
+    private readonly firebaseService: FirebaseService,
+    private readonly accountService: AccountService,
+    private readonly emailService: EmailService,
+  ) {}
 
   /**
    * Generate a unique 6-digit order ID (ORD[6 digits])
@@ -25,15 +31,11 @@ export class OrderService {
   }
 
   /**
-   * Generate a unique checkout code (8 characters alphanumeric)
+   * Generate a unique checkout code (AT + 6 digits)
    */
   private generateCheckoutCode(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
+    const randomNum = Math.floor(100000 + Math.random() * 900000);
+    return `AT${randomNum}`;
   }
 
   /**
@@ -253,5 +255,118 @@ export class OrderService {
     });
 
     await batch.commit();
+  }
+
+  /**
+   * Handle Sepay webhook for payment confirmation
+   */
+  async handlePaymentWebhook(
+    webhookData: any,
+    authorization?: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    orderId?: string;
+  }> {
+    try {
+      // Verify API key from Authorization header
+      const expectedApiKey = process.env.SEPAY_API_KEY;
+      if (!authorization) {
+        throw new BadRequestException('Missing Authorization header');
+      }
+
+      // Extract API key from "Apikey YOUR_KEY" format
+      const apiKeyMatch = authorization.match(/^Apikey\s+(.+)$/i);
+      if (!apiKeyMatch) {
+        throw new BadRequestException('Invalid Authorization format');
+      }
+
+      const providedApiKey = apiKeyMatch[1];
+      if (providedApiKey !== expectedApiKey) {
+        throw new BadRequestException('Invalid API key');
+      }
+
+      const { content, transferAmount } = webhookData;
+
+      if (!content || typeof content !== 'string') {
+        throw new BadRequestException('Missing or invalid payment content');
+      }
+
+      // Extract checkout code from content (format: AT123456)
+      const checkoutCodeMatch = content.match(/AT\d{6}/);
+      if (!checkoutCodeMatch) {
+        throw new BadRequestException('Invalid checkout code format');
+      }
+
+      const checkoutCode = checkoutCodeMatch[0];
+      const paidAmount = transferAmount;
+
+      if (!paidAmount || paidAmount <= 0) {
+        throw new BadRequestException('Invalid payment amount');
+      }
+
+      // Find order by checkout code
+      const firestore = this.firebaseService.getFirestore();
+      const ordersRef = firestore.collection('orders');
+      const snapshot = await ordersRef
+        .where('checkoutCode', '==', checkoutCode)
+        .where('status', '==', 'pending')
+        .limit(1)
+        .get();
+
+      if (snapshot.empty) {
+        throw new BadRequestException(
+          `No pending order found with checkout code: ${checkoutCode}`,
+        );
+      }
+
+      const orderDoc = snapshot.docs[0];
+      const order = orderDoc.data() as Order;
+
+      // Verify payment amount
+      if (paidAmount < order.totalPrice) {
+        throw new BadRequestException(
+          `Insufficient payment amount. Expected: ${order.totalPrice}, Received: ${paidAmount}`,
+        );
+      }
+
+      // Update order status to paid
+      await orderDoc.ref.update({
+        status: 'paid',
+        paidAt: new Date(),
+        updatedAt: new Date(),
+        paidAmount: paidAmount,
+      });
+
+      // Get and mark account as sold
+      const accountCredentials =
+        await this.accountService.getAndMarkAccountAsSold(
+          order.accountId,
+          order.categoryName,
+        );
+
+      if (!accountCredentials) {
+        console.error('No available account found for order:', order.orderId);
+        throw new BadRequestException('No available account found');
+      }
+
+      // Send email with account info
+      await this.emailService.sendAccountDeliveryEmail(
+        order.email,
+        order.checkoutCode,
+        `${order.game} - ${order.categoryName}`,
+        accountCredentials.username,
+        accountCredentials.password,
+      );
+
+      return {
+        success: true,
+        message: 'Payment confirmed successfully',
+        orderId: order.orderId,
+      };
+    } catch (error) {
+      console.error('Error handling payment webhook:', error);
+      throw error;
+    }
   }
 }
