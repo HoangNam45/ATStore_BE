@@ -212,6 +212,32 @@ export class OrderService {
   }
 
   /**
+   * Get all orders for a specific user
+   */
+  async getUserOrders(userId: string): Promise<Order[]> {
+    try {
+      const firestore = this.firebaseService.getFirestore();
+      const ordersRef = firestore.collection('orders');
+
+      const snapshot = await ordersRef
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      if (snapshot.empty) {
+        return [];
+      }
+
+      return snapshot.docs.map((doc) => doc.data() as Order);
+    } catch (error) {
+      console.error(`Error fetching user orders:`, error);
+      throw new BadRequestException(
+        `Failed to fetch user orders: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Update order status
    */
   async updateOrderStatus(
@@ -255,6 +281,43 @@ export class OrderService {
     });
 
     await batch.commit();
+  }
+
+  /**
+   * Delete expired orders older than 1 week (to be called by cron job)
+   */
+  async deleteOldExpiredOrders(): Promise<number> {
+    const firestore = this.firebaseService.getFirestore();
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const ordersRef = firestore.collection('orders');
+    const snapshot = await ordersRef
+      .where('status', '==', 'expired')
+      .where('updatedAt', '<=', oneWeekAgo)
+      .get();
+
+    if (snapshot.empty) {
+      return 0;
+    }
+
+    // Firestore batch limit is 500 operations
+    const batchSize = 500;
+    let deletedCount = 0;
+
+    for (let i = 0; i < snapshot.docs.length; i += batchSize) {
+      const batch = firestore.batch();
+      const batchDocs = snapshot.docs.slice(i, i + batchSize);
+
+      batchDocs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+      deletedCount += batchDocs.length;
+    }
+
+    return deletedCount;
   }
 
   /**

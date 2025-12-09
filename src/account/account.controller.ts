@@ -165,4 +165,53 @@ export class AccountController {
     );
     return result;
   }
+
+  @Post('account/add')
+  @UseGuards(FirebaseAuthGuard)
+  async addAccountToCategory(
+    @Request() req: any,
+    @Body()
+    body: {
+      listId: string;
+      categoryId: string;
+      username: string;
+      password: string;
+    },
+  ) {
+    const result = await this.accountService.addAccountToCategory(
+      body.listId,
+      body.categoryId,
+      body.username,
+      body.password,
+      req.user.uid,
+    );
+    return result;
+  }
+
+  @Post('account/delete')
+  @UseGuards(FirebaseAuthGuard)
+  async deleteAccount(
+    @Request() req: any,
+    @Body()
+    body: {
+      listId: string;
+      categoryId: string;
+      accountId: string;
+    },
+  ) {
+    const result = await this.accountService.deleteAccount(
+      body.listId,
+      body.categoryId,
+      body.accountId,
+      req.user.uid,
+    );
+    return result;
+  }
+
+  @Get('owner/dashboard/stats')
+  @UseGuards(FirebaseAuthGuard)
+  async getDashboardStats(@Request() req: any) {
+    const stats = await this.accountService.getDashboardStats(req.user.uid);
+    return stats;
+  }
 }

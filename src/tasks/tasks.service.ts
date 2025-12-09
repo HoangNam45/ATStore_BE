@@ -21,4 +21,21 @@ export class TasksService {
       this.logger.error('Error checking expired orders:', error);
     }
   }
+
+  /**
+   * Delete expired orders older than 1 week
+   * Runs every day at 2:00 AM
+   */
+  @Cron('0 2 * * *')
+  async handleDeleteOldExpiredOrders() {
+    this.logger.log('Starting cleanup of old expired orders...');
+    try {
+      const deletedCount = await this.orderService.deleteOldExpiredOrders();
+      this.logger.log(
+        `Cleanup completed. Deleted ${deletedCount} expired orders older than 1 week`,
+      );
+    } catch (error) {
+      this.logger.error('Error deleting old expired orders:', error);
+    }
+  }
 }

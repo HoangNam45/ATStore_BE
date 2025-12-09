@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { CreateAccountDto } from './dto';
 import { EncryptionService } from '../common/services/encryption.service';
 import { FirebaseService } from '../firebase/firebase.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AccountService {
@@ -39,15 +40,18 @@ export class AccountService {
       ? data.categories
       : [];
 
-    // Encrypt account credentials in categories
+    // Encrypt account credentials in categories and generate IDs
     const encryptedCategories = categoriesArray.map((category) => ({
-      ...category,
+      id: uuidv4(),
+      name: category.name,
+      price: category.price,
       accounts: category.accounts.map((account) => {
         const encrypted = this.encryptionService.encryptCredentials(
           account.username,
           account.password,
         );
         return {
+          id: uuidv4(),
           username: encrypted.username,
           password: encrypted.password,
           status: 'available',
@@ -87,11 +91,19 @@ export class AccountService {
       const data = doc.data();
       const categories = data.categories || [];
 
-      // Calculate total account count across all categories
+      // Calculate total available account count across all categories
       const totalAccountCount = Array.isArray(categories)
         ? categories.reduce(
-            (total: number, category: { accounts?: Array<unknown> }) =>
-              total + (category.accounts?.length || 0),
+            (
+              total: number,
+              category: { accounts?: Array<{ status?: string }> },
+            ) => {
+              const availableCount =
+                category.accounts?.filter(
+                  (acc) => !acc.status || acc.status === 'available',
+                ).length || 0;
+              return total + availableCount;
+            },
             0,
           )
         : 0;
@@ -109,13 +121,20 @@ export class AccountService {
               (category: {
                 name: string;
                 price: number;
-                accounts?: Array<unknown>;
-              }) => ({
-                name: category.name,
-                price: category.price,
-                // Remove accounts array completely from public API
-                accountCount: category.accounts?.length || 0,
-              }),
+                accounts?: Array<{ status?: string }>;
+              }) => {
+                // Count only available accounts
+                const availableCount =
+                  category.accounts?.filter(
+                    (acc) => !acc.status || acc.status === 'available',
+                  ).length || 0;
+
+                return {
+                  name: category.name,
+                  price: category.price,
+                  accountCount: availableCount,
+                };
+              },
             )
           : [],
         createdAt: data.createdAt,
@@ -154,12 +173,20 @@ export class AccountService {
             (category: {
               name: string;
               price: number;
-              accounts?: Array<unknown>;
-            }) => ({
-              name: category.name,
-              price: category.price,
-              accountCount: category.accounts?.length || 0,
-            }),
+              accounts?: Array<{ status?: string }>;
+            }) => {
+              // Count only available accounts
+              const availableCount =
+                category.accounts?.filter(
+                  (acc) => !acc.status || acc.status === 'available',
+                ).length || 0;
+
+              return {
+                name: category.name,
+                price: category.price,
+                accountCount: availableCount,
+              };
+            },
           )
         : [],
       createdAt: data.createdAt,
@@ -181,15 +208,17 @@ export class AccountService {
       const decryptedCategories = Array.isArray(categories)
         ? categories.map(
             (category: {
+              id?: string;
               name: string;
               price: number;
               accounts?: Array<{
+                id?: string;
                 username: string;
                 password: string;
                 status?: string;
               }>;
             }) => ({
-              id: `${doc.id}_${category.name}`,
+              id: category.id || uuidv4(),
               name: category.name,
               price: category.price,
               accounts: (category.accounts || []).map((account, index) => {
@@ -199,7 +228,7 @@ export class AccountService {
                     account.password,
                   );
                   return {
-                    id: `${doc.id}_${category.name}_${index}`,
+                    id: account.id || `${doc.id}_${category.name}_${index}`,
                     username: decrypted.username,
                     password: decrypted.password,
                     price: category.price,
@@ -208,7 +237,7 @@ export class AccountService {
                 } catch (error) {
                   console.error('Error decrypting credentials:', error);
                   return {
-                    id: `${doc.id}_${category.name}_${index}`,
+                    id: account.id || `${doc.id}_${category.name}_${index}`,
                     username: 'Error decrypting',
                     password: 'Error decrypting',
                     price: category.price,
@@ -270,14 +299,14 @@ export class AccountService {
 
     const data = doc.data();
     const categories: Array<{
+      id?: string;
       name: string;
       price: number;
       accounts?: Array<unknown>;
     }> = data?.categories || [];
 
     const updatedCategories = categories.map((cat) => {
-      const catId = `${listId}_${cat.name}`;
-      if (catId === categoryId) {
+      if (cat.id === categoryId) {
         return { ...cat, name, price };
       }
       return cat;
@@ -309,35 +338,35 @@ export class AccountService {
 
     const data = doc.data();
     const categories: Array<{
+      id?: string;
       name: string;
       price?: number;
       accounts: Array<{
+        id?: string;
         username: string;
         password: string;
         status?: string;
       }>;
     }> = data?.categories || [];
 
-    // Extract category name from categoryId
-    const categoryName = categoryId.split('_').slice(1).join('_');
-    // Extract account index from accountId
-    const accountIndex = parseInt(accountId.split('_').pop() || '0');
-
     const updatedCategories = categories.map((cat) => {
-      if (cat.name === categoryName) {
-        const updatedAccounts = [...cat.accounts];
-        if (updatedAccounts[accountIndex]) {
-          // Encrypt new credentials
-          const encrypted = this.encryptionService.encryptCredentials(
-            username,
-            password,
-          );
-          updatedAccounts[accountIndex] = {
-            username: encrypted.username,
-            password: encrypted.password,
-            status: status,
-          };
-        }
+      if (cat.id === categoryId) {
+        const updatedAccounts = cat.accounts.map((acc) => {
+          if (acc.id === accountId) {
+            // Encrypt new credentials
+            const encrypted = this.encryptionService.encryptCredentials(
+              username,
+              password,
+            );
+            return {
+              ...acc,
+              username: encrypted.username,
+              password: encrypted.password,
+              status: status,
+            };
+          }
+          return acc;
+        });
         return { ...cat, accounts: updatedAccounts };
       }
       return cat;
@@ -349,6 +378,112 @@ export class AccountService {
     });
 
     return { success: true, message: 'Account updated successfully' };
+  }
+
+  async addAccountToCategory(
+    listId: string,
+    categoryId: string,
+    username: string,
+    password: string,
+    ownerId: string,
+  ) {
+    const docRef = this.firestore.collection('accounts').doc(listId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      throw new Error('Account list not found');
+    }
+
+    const data = doc.data();
+    if (data?.ownerId !== ownerId) {
+      throw new Error('Unauthorized');
+    }
+
+    const categories: Array<{
+      id?: string;
+      name: string;
+      accounts: Array<unknown>;
+    }> = data?.categories || [];
+    const categoryIndex = categories.findIndex((cat) => cat.id === categoryId);
+
+    if (categoryIndex === -1) {
+      throw new Error('Category not found');
+    }
+
+    // Encrypt credentials
+    const encrypted = this.encryptionService.encryptCredentials(
+      username,
+      password,
+    );
+
+    const updatedCategories = categories.map((cat, idx) => {
+      if (idx === categoryIndex) {
+        return {
+          ...cat,
+          accounts: [
+            ...cat.accounts,
+            {
+              id: uuidv4(),
+              username: encrypted.username,
+              password: encrypted.password,
+              status: 'available',
+            },
+          ],
+        };
+      }
+      return cat;
+    });
+
+    await docRef.update({
+      categories: updatedCategories,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, message: 'Account added successfully' };
+  }
+
+  async deleteAccount(
+    listId: string,
+    categoryId: string,
+    accountId: string,
+    ownerId: string,
+  ) {
+    const docRef = this.firestore.collection('accounts').doc(listId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      throw new Error('Account list not found');
+    }
+
+    const data = doc.data();
+    if (data?.ownerId !== ownerId) {
+      throw new Error('Unauthorized');
+    }
+
+    const categories: Array<{ id?: string; accounts: Array<{ id?: string }> }> =
+      data?.categories || [];
+    const categoryIndex = categories.findIndex((cat) => cat.id === categoryId);
+
+    if (categoryIndex === -1) {
+      throw new Error('Category not found');
+    }
+
+    const updatedCategories = categories.map((cat, idx) => {
+      if (idx === categoryIndex) {
+        const updatedAccounts = cat.accounts.filter(
+          (acc) => acc.id !== accountId,
+        );
+        return { ...cat, accounts: updatedAccounts };
+      }
+      return cat;
+    });
+
+    await docRef.update({
+      categories: updatedCategories,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, message: 'Account deleted successfully' };
   }
 
   private getGameSlug(gameName: string): string {
@@ -434,5 +569,81 @@ export class AccountService {
     });
 
     return decrypted;
+  }
+
+  /**
+   * Get dashboard statistics for owner
+   */
+  async getDashboardStats(ownerId: string) {
+    const snapshot = await this.firestore
+      .collection('accounts')
+      .where('ownerId', '==', ownerId)
+      .get();
+
+    let totalAccounts = 0;
+    let soldAccounts = 0;
+    const gameStats: Record<
+      string,
+      { total: number; sold: number; name: string }
+    > = {};
+
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      const game = data.game;
+      const categories: Array<{
+        accounts: Array<{ status?: string }>;
+      }> = data.categories || [];
+
+      categories.forEach((category) => {
+        const accounts = category.accounts || [];
+        accounts.forEach((account) => {
+          totalAccounts++;
+          if (account.status === 'sold') {
+            soldAccounts++;
+          }
+
+          if (!gameStats[game]) {
+            gameStats[game] = { name: game, total: 0, sold: 0 };
+          }
+          gameStats[game].total++;
+          if (account.status === 'sold') {
+            gameStats[game].sold++;
+          }
+        });
+      });
+    });
+
+    // Get revenue from orders
+    const ordersSnapshot = await this.firestore
+      .collection('orders')
+      .where('status', '==', 'paid')
+      .get();
+
+    let totalRevenue = 0;
+    const gameRevenue: Record<string, number> = {};
+
+    ordersSnapshot.docs.forEach((doc) => {
+      const order = doc.data();
+      totalRevenue += order.totalPrice || 0;
+
+      const game = order.game;
+      if (!gameRevenue[game]) {
+        gameRevenue[game] = 0;
+      }
+      gameRevenue[game] += order.totalPrice || 0;
+    });
+
+    // Combine stats
+    const gameStatsArray = Object.values(gameStats).map((stat) => ({
+      ...stat,
+      revenue: gameRevenue[stat.name] || 0,
+    }));
+
+    return {
+      totalAccounts,
+      soldAccounts,
+      revenue: totalRevenue,
+      gameStats: gameStatsArray,
+    };
   }
 }
