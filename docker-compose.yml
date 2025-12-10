@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # NestJS Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atstore-backend
+    restart: unless-stopped
+    ports:
+      - '5003:5000'
+    environment:
+      # Firebase
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_PRIVATE_KEY_ID: ${FIREBASE_PRIVATE_KEY_ID}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_CLIENT_ID: ${FIREBASE_CLIENT_ID}
+      FIREBASE_AUTH_URI: ${FIREBASE_AUTH_URI}
+      FIREBASE_TOKEN_URI: ${FIREBASE_TOKEN_URI}
+      FIREBASE_AUTH_PROVIDER_CERT_URL: ${FIREBASE_AUTH_PROVIDER_CERT_URL}
+      FIREBASE_CLIENT_CERT_URL: ${FIREBASE_CLIENT_CERT_URL}
+      FIREBASE_UNIVERSE_DOMAIN: ${FIREBASE_UNIVERSE_DOMAIN}
+      FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET}
+
+      # App config
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      FRONTEND_URL: ${FRONTEND_URL}
+      PORT: 5000
+
+      # Email config
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+
+      # Payment config
+      SEPAY_QR_API_URL: ${SEPAY_QR_API_URL}
+      SEPAY_VIRTUAL_ACCOUNT: ${SEPAY_VIRTUAL_ACCOUNT}
+      SEPAY_BANK_CODE: ${SEPAY_BANK_CODE}
+      SEPAY_API_KEY: ${SEPAY_API_KEY}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./logs:/app/logs

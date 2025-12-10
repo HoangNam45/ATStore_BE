@@ -7,11 +7,13 @@ import {
   Headers,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Order } from './entities/order.entity';
 import { FirebaseUserGuard } from '../common/guards/firebase-user.guard';
+import { FirebaseAuthGuard } from '../common/guards/firebase-auth.guard';
 
 @Controller('order')
 export class OrderController {
@@ -32,6 +34,30 @@ export class OrderController {
   async getUserOrders(@Request() req): Promise<Order[]> {
     const userId = req.user.uid;
     return this.orderService.getUserOrders(userId);
+  }
+
+  @UseGuards(FirebaseAuthGuard)
+  @Get('admin/all-orders')
+  async getAllOrders(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ): Promise<{
+    orders: Order[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    return this.orderService.getAllOrders({
+      page: parseInt(page),
+      limit: parseInt(limit),
+      search,
+      startDate,
+      endDate,
+    });
   }
 
   @Post('webhook/payment')

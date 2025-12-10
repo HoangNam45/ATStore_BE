@@ -238,6 +238,83 @@ export class OrderService {
   }
 
   /**
+   * Get all orders for admin with filtering, search, and pagination
+   */
+  async getAllOrders(params: {
+    page: number;
+    limit: number;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    orders: Order[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    try {
+      const firestore = this.firebaseService.getFirestore();
+      const ordersRef = firestore.collection('orders');
+
+      // Build query for paid orders only
+      let query = ordersRef.where('status', '==', 'paid');
+
+      // Apply date filters
+      if (params.startDate) {
+        const startDate = new Date(params.startDate);
+        query = query.where('createdAt', '>=', startDate);
+      }
+
+      if (params.endDate) {
+        const endDate = new Date(params.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        query = query.where('createdAt', '<=', endDate);
+      }
+
+      // Order by createdAt descending
+      query = query.orderBy('createdAt', 'desc');
+
+      // Get all matching documents
+      const snapshot = await query.get();
+
+      let allOrders = snapshot.docs.map((doc) => doc.data() as Order);
+
+      // Apply search filter (client-side since Firestore doesn't support OR queries efficiently)
+      if (params.search && params.search.trim() !== '') {
+        const searchLower = params.search.toLowerCase().trim();
+        allOrders = allOrders.filter(
+          (order) =>
+            order.orderId.toLowerCase().includes(searchLower) ||
+            order.email.toLowerCase().includes(searchLower) ||
+            order.game.toLowerCase().includes(searchLower) ||
+            order.accountType.toLowerCase().includes(searchLower),
+        );
+      }
+
+      // Calculate pagination
+      const total = allOrders.length;
+      const totalPages = Math.ceil(total / params.limit);
+      const startIndex = (params.page - 1) * params.limit;
+      const endIndex = startIndex + params.limit;
+
+      // Get paginated orders
+      const paginatedOrders = allOrders.slice(startIndex, endIndex);
+
+      return {
+        orders: paginatedOrders,
+        total,
+        page: params.page,
+        limit: params.limit,
+        totalPages,
+      };
+    } catch (error) {
+      console.error(`Error fetching all orders:`, error);
+      throw new BadRequestException(`Failed to fetch orders: ${error.message}`);
+    }
+  }
+
+  /**
    * Update order status
    */
   async updateOrderStatus(
