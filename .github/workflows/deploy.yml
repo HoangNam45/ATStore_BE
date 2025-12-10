@@ -42,6 +42,7 @@ jobs:
   deploy-to-vps:
     needs: build-and-push
     runs-on: ubuntu-latest
+     environment: ATStore
 
     steps:
       - name: Deploy to VPS
