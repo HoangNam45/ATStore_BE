@@ -63,8 +63,8 @@ jobs:
             docker compose down
             docker compose up -d
 
-            # Clean up old images
-            docker image prune -af
+            # Clean up old images of this project only
+            docker images ${{ env.DOCKER_IMAGE }} --format "{{.ID}} {{.Tag}}" | grep -v latest | awk '{print $1}' | xargs -r docker rmi || true
 
             # Show container status
             docker compose ps
