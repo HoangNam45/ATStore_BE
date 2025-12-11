@@ -3,9 +3,7 @@ version: '3.8'
 services:
   # NestJS Backend
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE:nhhnam/atstore-backend:latest}
     container_name: atstore-backend
     restart: unless-stopped
     ports:
