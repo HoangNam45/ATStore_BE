@@ -227,6 +227,7 @@ export class AccountService {
                     account.username,
                     account.password,
                   );
+
                   return {
                     id: account.id || `${doc.id}_${category.name}_${index}`,
                     username: decrypted.username,
