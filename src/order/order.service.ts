@@ -147,11 +147,14 @@ export class OrderService {
         bankCode: process.env.SEPAY_BANK_CODE || 'BIDV',
       };
 
+      // Build payment content following Sepay requirement: SEVQR TKPAT1 + checkout code
+      const paymentContent = `SEVQR TKPAT1 ${checkoutCode}`;
+
       // Generate QR code with Sepay
       const qrCodeUrl = this.generateSepayQR(
         bankInfo.accountNo,
         createOrderDto.totalPrice,
-        checkoutCode,
+        paymentContent,
         bankInfo.bankCode,
       );
 
@@ -432,8 +435,23 @@ export class OrderService {
         throw new BadRequestException('Missing or invalid payment content');
       }
 
+      const normalizedContent = content.trim();
+      const normalizedUpper = normalizedContent.toUpperCase();
+
+      // Content must contain SEVQR (position can vary depending on bank prefix)
+      if (!normalizedUpper.includes('SEVQR')) {
+        throw new BadRequestException('Payment content must include SEVQR');
+      }
+
+      // Content must contain the sub-account marker TKPAT1
+      if (!normalizedUpper.includes('TKPAT1')) {
+        throw new BadRequestException(
+          'Payment content must include sub-account marker TKPAT1',
+        );
+      }
+
       // Extract checkout code from content (format: AT123456)
-      const checkoutCodeMatch = content.match(/AT\d{6}/);
+      const checkoutCodeMatch = normalizedUpper.match(/AT\d{6}/);
       if (!checkoutCodeMatch) {
         throw new BadRequestException('Invalid checkout code format');
       }

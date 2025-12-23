@@ -72,7 +72,7 @@ export class EmailService {
         <!-- Content area -->
         <div style="padding: 30px;">
           <div style="text-align: center; margin-bottom: 30px;">
-            <h2 style="color: #ec4899; margin: 0 0 10px 0; font-size: 24px;">Xin chào! 🎮</h2>
+            <h2 style="color: #ec4899; margin: 0 0 10px 0; font-size: 24px;">Xin chào!</h2>
             <p style="color: #6b7280; font-size: 16px; line-height: 1.6; margin: 0;">
               Đơn hàng <strong style="color: #ec4899;">${orderCode}</strong> của bạn đã được xử lý thành công.<br>
               Dưới đây là thông tin chi tiết của bạn.
