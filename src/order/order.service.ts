@@ -170,15 +170,19 @@ export class OrderService {
         totalPrice: createOrderDto.totalPrice,
         email: createOrderDto.email,
         game: createOrderDto.game,
-        server: createOrderDto.server,
+        server: createOrderDto.server ?? '',
         displayImage: createOrderDto.displayImage,
-        userId: createOrderDto.userId,
         status: 'pending',
         qrCodeUrl,
         createdAt: now,
         expiresAt,
         updatedAt: now,
       };
+
+      // Only include userId if present to avoid Firestore undefined error
+      if (createOrderDto.userId) {
+        (order as any).userId = createOrderDto.userId;
+      }
 
       // Save to Firestore
       const firestore = this.firebaseService.getFirestore();

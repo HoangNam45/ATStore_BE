@@ -23,9 +23,20 @@ async function bootstrap() {
       `${process.env.FRONTEND_URL}`,
       'https://aryan-tufaceous-coquettishly.ngrok-free.dev',
     ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+      'Content-Length',
+      'ngrok-skip-browser-warning',
+    ],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
     credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
     maxAge: 3600,
   });
   await app.listen(process.env.PORT ?? 3000);

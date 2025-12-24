@@ -40,8 +40,8 @@ export class CreateOrderDto {
   game: string;
 
   @IsString()
-  @IsNotEmpty()
-  server: string;
+  @IsOptional()
+  server?: string;
 
   @IsString()
   displayImage: string;
