@@ -193,6 +193,30 @@ export class FirebaseService {
   }
 
   /**
+   * Delete file from Firebase Storage by URL
+   */
+  async deleteImage(imageUrl: string): Promise<void> {
+    try {
+      const bucket = this.storage.bucket();
+      // Extract file path from URL
+      // URL format: https://storage.googleapis.com/{bucket-name}/{file-path}
+      const urlParts = imageUrl.split(`${bucket.name}/`);
+      if (urlParts.length < 2) {
+        console.error('Invalid image URL format:', imageUrl);
+        return;
+      }
+
+      const filePath = decodeURIComponent(urlParts[1]);
+      const file = bucket.file(filePath);
+
+      await file.delete();
+    } catch (error) {
+      console.error('Error deleting image from storage:', error);
+      // Don't throw error, just log it
+    }
+  }
+
+  /**
    * Get Firestore instance
    */
   getFirestore(): admin.firestore.Firestore {

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Param,
   UseGuards,
   UseInterceptors,
@@ -213,5 +214,44 @@ export class AccountController {
   async getDashboardStats(@Request() req: any) {
     const stats = await this.accountService.getDashboardStats(req.user.uid);
     return stats;
+  }
+
+  @Delete('list/:listId')
+  @UseGuards(FirebaseAuthGuard)
+  async deleteList(@Request() req: any, @Param('listId') listId: string) {
+    const result = await this.accountService.deleteList(listId, req.user.uid);
+    return result;
+  }
+
+  @Post('list/:listId/images')
+  @UseGuards(FirebaseAuthGuard)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'displayImage', maxCount: 1 },
+      { name: 'detailImages', maxCount: 8 },
+    ]),
+  )
+  async updateListImages(
+    @Request() req: any,
+    @Param('listId') listId: string,
+    @UploadedFiles()
+    files: {
+      displayImage?: Express.Multer.File[];
+      detailImages?: Express.Multer.File[];
+    },
+    @Body() body: any,
+  ) {
+    const imagesToDelete = body.imagesToDelete
+      ? JSON.parse(body.imagesToDelete)
+      : [];
+
+    const result = await this.accountService.updateListImages(
+      listId,
+      req.user.uid,
+      files.displayImage?.[0],
+      files.detailImages || [],
+      imagesToDelete,
+    );
+    return result;
   }
 }

@@ -467,7 +467,7 @@ export class OrderService {
         throw new BadRequestException('Invalid payment amount');
       }
 
-      // Find order by checkout code
+      // Find order by checkout code (outside transaction to minimize scope)
       const firestore = this.firebaseService.getFirestore();
       const ordersRef = firestore.collection('orders');
       const snapshot = await ordersRef
@@ -492,34 +492,43 @@ export class OrderService {
         );
       }
 
-      // Update order status to paid
-      await orderDoc.ref.update({
-        status: 'paid',
-        paidAt: new Date(),
-        updatedAt: new Date(),
-        paidAmount: paidAmount,
-      });
+      // TRANSACTION: Update order status and mark account as sold atomically
+      let accountCredentials: any = null;
 
-      // Get and mark account as sold
-      const accountCredentials =
-        await this.accountService.getAndMarkAccountAsSold(
+      await firestore.runTransaction(async (transaction) => {
+        // Get and mark account as sold within transaction
+        accountCredentials = await this.accountService.getAndMarkAccountAsSold(
           order.accountId,
           order.categoryName,
+          transaction,
         );
 
-      if (!accountCredentials) {
-        console.error('No available account found for order:', order.orderId);
-        throw new BadRequestException('No available account found');
-      }
+        if (!accountCredentials) {
+          throw new BadRequestException('No available account found');
+        }
 
-      // Send email with account info
-      await this.emailService.sendAccountDeliveryEmail(
-        order.email,
-        order.checkoutCode,
-        `${order.game} - ${order.categoryName}`,
-        accountCredentials.username,
-        accountCredentials.password,
-      );
+        // Update order status to paid within transaction
+        transaction.update(orderDoc.ref, {
+          status: 'paid',
+          paidAt: new Date(),
+          updatedAt: new Date(),
+          paidAmount: paidAmount,
+        });
+      });
+
+      // Send email OUTSIDE transaction (can fail without rolling back order payment)
+      try {
+        await this.emailService.sendAccountDeliveryEmail(
+          order.email,
+          order.checkoutCode,
+          `${order.game} - ${order.categoryName}`,
+          accountCredentials.username,
+          accountCredentials.password,
+        );
+      } catch (emailError) {
+        console.error('Error sending account delivery email:', emailError);
+        // Don't throw - email can be retried later, order payment is already confirmed
+      }
 
       return {
         success: true,

@@ -509,9 +509,12 @@ export class AccountService {
   async getAndMarkAccountAsSold(
     accountId: string,
     categoryName: string,
+    transaction?: admin.firestore.Transaction,
   ): Promise<{ username: string; password: string } | null> {
     const docRef = this.firestore.collection('accounts').doc(accountId);
-    const doc = await docRef.get();
+    const doc = transaction
+      ? await transaction.get(docRef)
+      : await docRef.get();
 
     if (!doc.exists) {
       return null;
@@ -564,10 +567,16 @@ export class AccountService {
       ),
     };
 
-    await docRef.update({
+    const updateData = {
       categories: updatedCategories,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+
+    if (transaction) {
+      transaction.update(docRef, updateData);
+    } else {
+      await docRef.update(updateData);
+    }
 
     return decrypted;
   }
@@ -646,5 +655,131 @@ export class AccountService {
       revenue: totalRevenue,
       gameStats: gameStatsArray,
     };
+  }
+
+  /**
+   * Delete list and all associated images
+   */
+  async deleteList(listId: string, ownerId: string) {
+    const docRef = this.firestore.collection('accounts').doc(listId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      throw new Error('Account list not found');
+    }
+
+    const data = doc.data();
+    if (data?.ownerId !== ownerId) {
+      throw new Error('Unauthorized');
+    }
+
+    // Delete images from storage
+    const imagesToDelete: string[] = [];
+
+    if (data.displayImage) {
+      imagesToDelete.push(data.displayImage);
+    }
+
+    if (Array.isArray(data.detailImages)) {
+      imagesToDelete.push(...data.detailImages);
+    }
+
+    // Delete images from Firebase Storage
+    for (const imageUrl of imagesToDelete) {
+      try {
+        await this.firebaseService.deleteImage(imageUrl);
+      } catch (error) {
+        console.error('Error deleting image:', error);
+        // Continue even if image deletion fails
+      }
+    }
+
+    // Delete document
+    await docRef.delete();
+
+    return { success: true, message: 'List deleted successfully' };
+  }
+
+  /**
+   * Update list images (display and detail images)
+   */
+  async updateListImages(
+    listId: string,
+    ownerId: string,
+    newDisplayImage?: Express.Multer.File,
+    newDetailImages?: Express.Multer.File[],
+    imagesToDelete?: string[],
+  ) {
+    const docRef = this.firestore.collection('accounts').doc(listId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      throw new Error('Account list not found');
+    }
+
+    const data = doc.data();
+    if (data?.ownerId !== ownerId) {
+      throw new Error('Unauthorized');
+    }
+
+    const updateData: any = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    // Upload new display image if provided
+    if (newDisplayImage) {
+      // Delete old display image
+      if (data.displayImage) {
+        try {
+          await this.firebaseService.deleteImage(data.displayImage);
+        } catch (error) {
+          console.error('Error deleting old display image:', error);
+        }
+      }
+
+      // Upload new display image
+      const displayImageUrl = await this.firebaseService.uploadImage(
+        newDisplayImage,
+        `accounts/${data.game}/display`,
+      );
+      updateData.displayImage = displayImageUrl;
+    }
+
+    // Handle detail images
+    let currentDetailImages: string[] = data.detailImages || [];
+
+    // Delete specified images
+    if (imagesToDelete && imagesToDelete.length > 0) {
+      for (const imageUrl of imagesToDelete) {
+        try {
+          await this.firebaseService.deleteImage(imageUrl);
+          currentDetailImages = currentDetailImages.filter(
+            (url) => url !== imageUrl,
+          );
+        } catch (error) {
+          console.error('Error deleting detail image:', error);
+        }
+      }
+    }
+
+    // Upload new detail images
+    if (newDetailImages && newDetailImages.length > 0) {
+      const newDetailImageUrls = await Promise.all(
+        newDetailImages.map((file) =>
+          this.firebaseService.uploadImage(
+            file,
+            `accounts/${data.game}/details`,
+          ),
+        ),
+      );
+      currentDetailImages = [...currentDetailImages, ...newDetailImageUrls];
+    }
+
+    updateData.detailImages = currentDetailImages;
+
+    // Update document
+    await docRef.update(updateData);
+
+    return { success: true, message: 'Images updated successfully' };
   }
 }
