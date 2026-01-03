@@ -321,6 +321,42 @@ export class AccountService {
     return { success: true, message: 'Category updated successfully' };
   }
 
+  async addCategoryToList(
+    listId: string,
+    name: string,
+    price: number,
+    ownerId: string,
+  ) {
+    const docRef = this.firestore.collection('accounts').doc(listId);
+    const doc = await docRef.get();
+
+    if (!doc.exists || doc.data()?.ownerId !== ownerId) {
+      throw new Error('List not found or unauthorized');
+    }
+
+    const data = doc.data();
+    const categories: Array<{
+      id?: string;
+      name: string;
+      price: number;
+      accounts?: Array<unknown>;
+    }> = data?.categories || [];
+
+    const newCategory = {
+      id: uuidv4(),
+      name,
+      price,
+      accounts: [],
+    };
+
+    await docRef.update({
+      categories: [...categories, newCategory],
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, message: 'Category added successfully' };
+  }
+
   async updateAccountCredentials(
     listId: string,
     categoryId: string,

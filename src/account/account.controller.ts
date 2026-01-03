@@ -141,6 +141,26 @@ export class AccountController {
     return result;
   }
 
+  @Post('category/add')
+  @UseGuards(FirebaseAuthGuard)
+  async addCategory(
+    @Request() req: any,
+    @Body()
+    body: {
+      listId: string;
+      name: string;
+      price: number;
+    },
+  ) {
+    const result = await this.accountService.addCategoryToList(
+      body.listId,
+      body.name,
+      body.price,
+      req.user.uid,
+    );
+    return result;
+  }
+
   @Post('account/update')
   @UseGuards(FirebaseAuthGuard)
   async updateAccount(
