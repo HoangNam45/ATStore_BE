@@ -48,9 +48,36 @@ export class EmailService {
     email: string,
     orderCode: string,
     productName: string,
-    username: string,
-    password: string,
+    credentials:
+      | Array<{ username: string; password: string }>
+      | { username: string; password: string },
   ) {
+    // Normalize credentials to always be an array
+    const credentialsArray = Array.isArray(credentials)
+      ? credentials
+      : [credentials];
+
+    // Generate HTML for all accounts
+    const accountsHTML = credentialsArray
+      .map(
+        (cred, index) => `
+      <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 15px;">
+        ${credentialsArray.length > 1 ? `<p style="color: #ec4899; font-weight: bold; margin: 0 0 12px 0;">Tài khoản ${index + 1}/${credentialsArray.length}</p>` : ''}
+        <div style="display: grid; gap: 12px;">
+          <div style="background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;">
+            <p style="margin: 0; color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Tài khoản</p>
+            <p style="margin: 5px 0 0 0; color: #111827; font-size: 16px; font-weight: bold; font-family: 'Courier New', monospace;">${cred.username}</p>
+          </div>
+          <div style="background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;">
+            <p style="margin: 0; color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Mật khẩu</p>
+            <p style="margin: 5px 0 0 0; color: #111827; font-size: 16px; font-weight: bold; font-family: 'Courier New', monospace;">${cred.password}</p>
+          </div>
+        </div>
+      </div>
+    `,
+      )
+      .join('');
+
     const mailOptions = {
       from: `"AT Store" <${this.configService.get<string>('EMAIL_USER')}>`,
       to: email,
@@ -87,6 +114,7 @@ export class EmailService {
             <div style="border-left: 3px solid #ec4899; padding-left: 15px;">
               <p style="margin: 8px 0; color: #374151; font-size: 15px;"><strong>Sản phẩm:</strong> <span style="color: #ec4899;">${productName}</span></p>
               <p style="margin: 8px 0; color: #374151; font-size: 15px;"><strong>Mã đơn hàng:</strong> <span style="color: #ec4899; font-family: 'Courier New', monospace;">${orderCode}</span></p>
+              ${credentialsArray.length > 1 ? `<p style="margin: 8px 0; color: #374151; font-size: 15px;"><strong>Số lượng tài khoản:</strong> <span style="color: #ec4899;">${credentialsArray.length}</span></p>` : ''}
             </div>
           </div>
 
@@ -97,18 +125,7 @@ export class EmailService {
               <h3 style="color: #92400e; margin: 0; font-size: 18px;">Thông tin tài khoản game</h3>
             </div>
             
-            <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 15px;">
-              <div style="display: grid; gap: 12px;">
-                <div style="background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;">
-                  <p style="margin: 0; color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Tài khoản</p>
-                  <p style="margin: 5px 0 0 0; color: #111827; font-size: 16px; font-weight: bold; font-family: 'Courier New', monospace;">${username}</p>
-                </div>
-                <div style="background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;">
-                  <p style="margin: 0; color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Mật khẩu</p>
-                  <p style="margin: 5px 0 0 0; color: #111827; font-size: 16px; font-weight: bold; font-family: 'Courier New', monospace;">${password}</p>
-                </div>
-              </div>
-            </div>
+            ${accountsHTML}
             
             <div style="background: #fef2f2; padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444;">
               <p style="margin: 0; color: #dc2626; font-size: 14px; font-weight: bold;">

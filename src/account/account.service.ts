@@ -545,8 +545,9 @@ export class AccountService {
   async getAndMarkAccountAsSold(
     accountId: string,
     categoryName: string,
+    quantity: number = 1,
     transaction?: admin.firestore.Transaction,
-  ): Promise<{ username: string; password: string } | null> {
+  ): Promise<Array<{ username: string; password: string }> | null> {
     const docRef = this.firestore.collection('accounts').doc(accountId);
     const doc = transaction
       ? await transaction.get(docRef)
@@ -576,31 +577,51 @@ export class AccountService {
     }
 
     const category = categories[categoryIndex];
+    const availableAccounts: Array<{
+      index: number;
+      account: { username: string; password: string; status?: string };
+      decrypted: { username: string; password: string };
+    }> = [];
 
-    // Find the first available account (oldest)
-    const accountIndex = category.accounts.findIndex(
-      (acc) => !acc.status || acc.status === 'available',
-    );
+    // Find all available accounts up to the requested quantity
+    category.accounts.forEach((acc, idx) => {
+      if (
+        availableAccounts.length < quantity &&
+        (!acc.status || acc.status === 'available')
+      ) {
+        const decrypted = this.encryptionService.decryptCredentials(
+          acc.username,
+          acc.password,
+        );
+        availableAccounts.push({
+          index: idx,
+          account: acc,
+          decrypted,
+        });
+      }
+    });
 
-    if (accountIndex === -1) {
+    // Check if we have enough available accounts
+    if (availableAccounts.length < quantity) {
       return null;
     }
 
-    const account = category.accounts[accountIndex];
-
-    // Decrypt credentials
-    const decrypted = this.encryptionService.decryptCredentials(
-      account.username,
-      account.password,
+    // Collect decrypted credentials to return
+    const decryptedCredentials = availableAccounts.map(
+      (item) => item.decrypted,
     );
 
-    // Update account status to sold
+    // Update account statuses to sold
     const updatedCategories = [...categories];
     updatedCategories[categoryIndex] = {
       ...category,
-      accounts: category.accounts.map((acc, idx) =>
-        idx === accountIndex ? { ...acc, status: 'sold' } : acc,
-      ),
+      accounts: category.accounts.map((acc, idx) => {
+        // Check if this account index is in our list to be sold
+        const shouldMarkAsSold = availableAccounts.some(
+          (item) => item.index === idx,
+        );
+        return shouldMarkAsSold ? { ...acc, status: 'sold' } : acc;
+      }),
     };
 
     const updateData = {
@@ -614,7 +635,7 @@ export class AccountService {
       await docRef.update(updateData);
     }
 
-    return decrypted;
+    return decryptedCredentials;
   }
 
   /**

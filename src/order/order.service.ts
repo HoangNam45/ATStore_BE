@@ -492,19 +492,22 @@ export class OrderService {
         );
       }
 
-      // TRANSACTION: Update order status and mark account as sold atomically
-      let accountCredentials: any = null;
+      // TRANSACTION: Update order status and mark accounts as sold atomically
+      let accountCredentials: Array<{ username: string; password: string }> =
+        [];
 
       await firestore.runTransaction(async (transaction) => {
-        // Get and mark account as sold within transaction
-        accountCredentials = await this.accountService.getAndMarkAccountAsSold(
-          order.accountId,
-          order.categoryName,
-          transaction,
-        );
+        // Get and mark accounts as sold within transaction
+        accountCredentials =
+          (await this.accountService.getAndMarkAccountAsSold(
+            order.accountId,
+            order.categoryName,
+            order.quantity,
+            transaction,
+          )) || [];
 
-        if (!accountCredentials) {
-          throw new BadRequestException('No available account found');
+        if (!accountCredentials || accountCredentials.length === 0) {
+          throw new BadRequestException('No available accounts found');
         }
 
         // Update order status to paid within transaction
@@ -522,8 +525,7 @@ export class OrderService {
           order.email,
           order.checkoutCode,
           `${order.game} - ${order.categoryName}`,
-          accountCredentials.username,
-          accountCredentials.password,
+          accountCredentials,
         );
       } catch (emailError) {
         console.error('Error sending account delivery email:', emailError);
