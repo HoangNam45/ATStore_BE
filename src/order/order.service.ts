@@ -109,6 +109,65 @@ export class OrderService {
   }
 
   /**
+   * Get count of paid orders for the current month
+   */
+  private async getOrderCountForCurrentMonth(): Promise<number> {
+    try {
+      const firestore = this.firebaseService.getFirestore();
+      const now = new Date();
+
+      // Get the first day of current month
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      firstDayOfMonth.setHours(0, 0, 0, 0);
+
+      // Get the last day of current month
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      lastDayOfMonth.setHours(23, 59, 59, 999);
+
+      const ordersRef = firestore.collection('orders');
+      const snapshot = await ordersRef
+        .where('status', '==', 'paid')
+        .where('paidAt', '>=', firstDayOfMonth)
+        .where('paidAt', '<=', lastDayOfMonth)
+        .get();
+
+      return snapshot.size;
+    } catch (error) {
+      console.error('Error counting monthly orders:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Select bank account based on monthly transaction limit
+   * Returns primary account if under 48 transactions, otherwise backup
+   */
+  private async selectBankAccount(): Promise<BankInfo> {
+    const monthlyOrderCount = await this.getOrderCountForCurrentMonth();
+    console.log(`Current month paid order count: ${monthlyOrderCount}`);
+
+    // Switch to backup account if primary has 48 or more transactions this month
+    if (monthlyOrderCount >= 47) {
+      console.log(
+        `Monthly limit reached (${monthlyOrderCount}/50). Using backup account.`,
+      );
+      return {
+        accountNo: process.env.SEPAY_VIRTUAL_ACCOUNT_BACKUP || '0398431863',
+        bankCode: process.env.SEPAY_BANK_CODE_BACKUP || 'MBBank',
+      };
+    }
+
+    // Use primary account
+    console.log(
+      `Using primary account (${monthlyOrderCount}/50 transactions this month).`,
+    );
+    return {
+      accountNo: process.env.SEPAY_VIRTUAL_ACCOUNT || '106880289426',
+      bankCode: process.env.SEPAY_BANK_CODE || 'VietinBank',
+    };
+  }
+
+  /**
    * Generate Sepay QR code URL
    */
   private generateSepayQR(
@@ -141,11 +200,8 @@ export class OrderService {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + 45 * 60 * 1000);
 
-      // Get bank info from environment variables
-      const bankInfo: BankInfo = {
-        accountNo: process.env.SEPAY_VIRTUAL_ACCOUNT || '96247VVHYNOL806',
-        bankCode: process.env.SEPAY_BANK_CODE || 'BIDV',
-      };
+      // Get bank account based on monthly transaction limit
+      const bankInfo: BankInfo = await this.selectBankAccount();
 
       // Build payment content following Sepay requirement: SEVQR TKPAT1 + checkout code
       const paymentContent = `SEVQR TKPAT1 ${checkoutCode}`;
@@ -156,6 +212,11 @@ export class OrderService {
         createOrderDto.totalPrice,
         paymentContent,
         bankInfo.bankCode,
+      );
+
+      // Log which account is being used for this order
+      console.log(
+        `Order ${orderId}: Using ${bankInfo.bankCode} account ${bankInfo.accountNo}`,
       );
 
       // Create order object
@@ -406,6 +467,8 @@ export class OrderService {
 
   /**
    * Handle Sepay webhook for payment confirmation
+   * Note: This webhook accepts payments from both primary and backup accounts
+   * Payment verification is based on checkout code, not account number
    */
   async handlePaymentWebhook(
     webhookData: any,
