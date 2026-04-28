@@ -46,14 +46,11 @@ export class AccountService {
       name: category.name,
       price: category.price,
       accounts: category.accounts.map((account) => {
-        const encrypted = this.encryptionService.encryptCredentials(
-          account.username,
-          account.password,
-        );
+        // Encrypt new format: single credentials field
+        const encrypted = this.encryptionService.encrypt(account.credentials);
         return {
           id: uuidv4(),
-          username: encrypted.username,
-          password: encrypted.password,
+          credentials: encrypted,
           status: 'available',
         };
       }),
@@ -213,8 +210,9 @@ export class AccountService {
               price: number;
               accounts?: Array<{
                 id?: string;
-                username: string;
-                password: string;
+                credentials?: string;
+                username?: string;
+                password?: string;
                 status?: string;
               }>;
             }) => ({
@@ -223,15 +221,36 @@ export class AccountService {
               price: category.price,
               accounts: (category.accounts || []).map((account, index) => {
                 try {
-                  const decrypted = this.encryptionService.decryptCredentials(
-                    account.username,
-                    account.password,
-                  );
+                  // New format: single credentials field
+                  if (account.credentials) {
+                    return {
+                      id: account.id || `${doc.id}_${category.name}_${index}`,
+                      credentials: this.encryptionService.decrypt(
+                        account.credentials,
+                      ),
+                      price: category.price,
+                      status: account.status || 'available',
+                    };
+                  }
+                  // Old format: separate username and password
+                  if (account.username && account.password) {
+                    const decrypted = this.encryptionService.decryptCredentials(
+                      account.username,
+                      account.password,
+                    );
 
+                    return {
+                      id: account.id || `${doc.id}_${category.name}_${index}`,
+                      username: decrypted.username,
+                      password: decrypted.password,
+                      price: category.price,
+                      status: account.status || 'available',
+                    };
+                  }
+                  // Fallback for invalid old format
                   return {
                     id: account.id || `${doc.id}_${category.name}_${index}`,
-                    username: decrypted.username,
-                    password: decrypted.password,
+                    credentials: 'Invalid account data',
                     price: category.price,
                     status: account.status || 'available',
                   };
@@ -239,8 +258,7 @@ export class AccountService {
                   console.error('Error decrypting credentials:', error);
                   return {
                     id: account.id || `${doc.id}_${category.name}_${index}`,
-                    username: 'Error decrypting',
-                    password: 'Error decrypting',
+                    credentials: 'Error decrypting',
                     price: category.price,
                     status: account.status || 'available',
                   };
@@ -361,8 +379,7 @@ export class AccountService {
     listId: string,
     categoryId: string,
     accountId: string,
-    username: string,
-    password: string,
+    credentials: string,
     status: 'available' | 'sold',
     ownerId: string,
   ) {
@@ -391,14 +408,10 @@ export class AccountService {
         const updatedAccounts = cat.accounts.map((acc) => {
           if (acc.id === accountId) {
             // Encrypt new credentials
-            const encrypted = this.encryptionService.encryptCredentials(
-              username,
-              password,
-            );
+            const encrypted = this.encryptionService.encrypt(credentials);
             return {
               ...acc,
-              username: encrypted.username,
-              password: encrypted.password,
+              credentials: encrypted,
               status: status,
             };
           }
@@ -420,8 +433,7 @@ export class AccountService {
   async addAccountToCategory(
     listId: string,
     categoryId: string,
-    username: string,
-    password: string,
+    credentials: string,
     ownerId: string,
   ) {
     const docRef = this.firestore.collection('accounts').doc(listId);
@@ -448,10 +460,7 @@ export class AccountService {
     }
 
     // Encrypt credentials
-    const encrypted = this.encryptionService.encryptCredentials(
-      username,
-      password,
-    );
+    const encrypted = this.encryptionService.encrypt(credentials);
 
     const updatedCategories = categories.map((cat, idx) => {
       if (idx === categoryIndex) {
@@ -461,8 +470,7 @@ export class AccountService {
             ...cat.accounts,
             {
               id: uuidv4(),
-              username: encrypted.username,
-              password: encrypted.password,
+              credentials: encrypted,
               status: 'available',
             },
           ],
@@ -547,7 +555,11 @@ export class AccountService {
     categoryName: string,
     quantity: number = 1,
     transaction?: admin.firestore.Transaction,
-  ): Promise<Array<{ username: string; password: string }> | null> {
+  ): Promise<Array<{
+    username?: string;
+    password?: string;
+    credentials?: string;
+  }> | null> {
     const docRef = this.firestore.collection('accounts').doc(accountId);
     const doc = transaction
       ? await transaction.get(docRef)
@@ -561,8 +573,10 @@ export class AccountService {
     const categories: Array<{
       name: string;
       accounts: Array<{
-        username: string;
-        password: string;
+        id?: string;
+        credentials?: string;
+        username?: string;
+        password?: string;
         status?: string;
       }>;
     }> = data?.categories || [];
@@ -579,8 +593,14 @@ export class AccountService {
     const category = categories[categoryIndex];
     const availableAccounts: Array<{
       index: number;
-      account: { username: string; password: string; status?: string };
-      decrypted: { username: string; password: string };
+      account: {
+        id?: string;
+        credentials?: string;
+        username?: string;
+        password?: string;
+        status?: string;
+      };
+      decrypted: { username?: string; password?: string; credentials?: string };
     }> = [];
 
     // Find all available accounts up to the requested quantity
@@ -589,15 +609,66 @@ export class AccountService {
         availableAccounts.length < quantity &&
         (!acc.status || acc.status === 'available')
       ) {
-        const decrypted = this.encryptionService.decryptCredentials(
-          acc.username,
-          acc.password,
-        );
-        availableAccounts.push({
-          index: idx,
-          account: acc,
-          decrypted,
-        });
+        try {
+          let decrypted: {
+            username?: string;
+            password?: string;
+            credentials?: string;
+          };
+
+          // Handle new format: single credentials field
+          if (acc.credentials && typeof acc.credentials === 'string') {
+            try {
+              const decryptedText = this.encryptionService.decrypt(
+                acc.credentials,
+              );
+              decrypted = { credentials: decryptedText };
+            } catch (decryptError) {
+              console.error(
+                'Error decrypting new format credentials:',
+                decryptError,
+              );
+              return; // Skip this account
+            }
+          }
+          // Handle old format: separate username and password
+          else if (
+            acc.username &&
+            acc.password &&
+            typeof acc.username === 'string' &&
+            typeof acc.password === 'string'
+          ) {
+            try {
+              const decryptedCreds = this.encryptionService.decryptCredentials(
+                acc.username,
+                acc.password,
+              );
+              decrypted = {
+                username: decryptedCreds.username,
+                password: decryptedCreds.password,
+              };
+            } catch (decryptError) {
+              console.error(
+                'Error decrypting old format credentials:',
+                decryptError,
+              );
+              return; // Skip this account
+            }
+          } else {
+            // Invalid account format, skip it
+            return;
+          }
+
+          availableAccounts.push({
+            index: idx,
+            account: acc,
+            decrypted,
+          });
+        } catch (error) {
+          console.error('Error processing account:', error);
+          // Skip this account if any error occurs
+          return;
+        }
       }
     });
 

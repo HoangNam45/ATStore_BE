@@ -47,4 +47,18 @@ export class EncryptionService {
       password: this.decrypt(encryptedPassword),
     };
   }
+
+  /**
+   * Decrypt username only
+   */
+  decryptUsername(encryptedUsername: string): string {
+    return this.decrypt(encryptedUsername);
+  }
+
+  /**
+   * Decrypt password only
+   */
+  decryptPassword(encryptedPassword: string): string {
+    return this.decrypt(encryptedPassword);
+  }
 }

@@ -49,8 +49,8 @@ export class EmailService {
     orderCode: string,
     productName: string,
     credentials:
-      | Array<{ username: string; password: string }>
-      | { username: string; password: string },
+      | Array<{ username?: string; password?: string; credentials?: string }>
+      | { username?: string; password?: string; credentials?: string },
   ) {
     // Normalize credentials to always be an array
     const credentialsArray = Array.isArray(credentials)
@@ -59,8 +59,26 @@ export class EmailService {
 
     // Generate HTML for all accounts
     const accountsHTML = credentialsArray
-      .map(
-        (cred, index) => `
+      .map((cred, index) => {
+        // Check if it's new format (credentials field) or old format (username/password)
+        const isNewFormat = !!cred.credentials && !cred.username;
+
+        if (isNewFormat) {
+          // New format: single credentials field
+          return `
+      <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 15px;">
+        ${credentialsArray.length > 1 ? `<p style="color: #ec4899; font-weight: bold; margin: 0 0 12px 0;">Tài khoản ${index + 1}/${credentialsArray.length}</p>` : ''}
+        <div style="display: grid; gap: 12px;">
+          <div style="background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;">
+            <p style="margin: 0; color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Thông tin tài khoản</p>
+            <p style="margin: 5px 0 0 0; color: #111827; font-size: 16px; font-weight: bold; font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-all;">${cred.credentials}</p>
+          </div>
+        </div>
+      </div>
+    `;
+        } else {
+          // Old format: username and password separately
+          return `
       <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 15px;">
         ${credentialsArray.length > 1 ? `<p style="color: #ec4899; font-weight: bold; margin: 0 0 12px 0;">Tài khoản ${index + 1}/${credentialsArray.length}</p>` : ''}
         <div style="display: grid; gap: 12px;">
@@ -74,8 +92,9 @@ export class EmailService {
           </div>
         </div>
       </div>
-    `,
-      )
+    `;
+        }
+      })
       .join('');
 
     const mailOptions = {
@@ -139,12 +158,7 @@ export class EmailService {
 
           <!-- Footer sakura -->
           <div style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #fdf2f8 0%, #f1f5f9 100%); border-radius: 12px; text-align: center; border: 1px solid #e2e8f0;">
-            <div style="margin-bottom: 15px;">
-              <span style="font-size: 24px; margin: 0 5px;">🌸</span>
-              <span style="font-size: 20px; margin: 0 3px;">✨</span>
-              <span style="font-size: 24px; margin: 0 5px;">🌸</span>
-            </div>
-            <h3 style="color: #ec4899; margin: 0 0 10px 0; font-size: 18px;">Cảm ơn bạn đã chọn QTAT Shop!</h3>
+            <h3 style="color: #ec4899; margin: 0 0 10px 0; font-size: 18px;">Cảm ơn bạn đã chọn AT Store!</h3>
             <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0;">
               Nếu bạn có bất kỳ thắc mắc nào về sản phẩm hoặc dịch vụ,<br>
               đừng ngần ngại liên hệ với chúng tôi.<br>

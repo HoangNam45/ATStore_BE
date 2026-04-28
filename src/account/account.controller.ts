@@ -170,8 +170,7 @@ export class AccountController {
       listId: string;
       categoryId: string;
       accountId: string;
-      username: string;
-      password: string;
+      credentials: string;
       status: 'available' | 'sold';
     },
   ) {
@@ -179,8 +178,7 @@ export class AccountController {
       body.listId,
       body.categoryId,
       body.accountId,
-      body.username,
-      body.password,
+      body.credentials,
       body.status,
       req.user.uid,
     );
@@ -195,15 +193,13 @@ export class AccountController {
     body: {
       listId: string;
       categoryId: string;
-      username: string;
-      password: string;
+      credentials: string;
     },
   ) {
     const result = await this.accountService.addAccountToCategory(
       body.listId,
       body.categoryId,
-      body.username,
-      body.password,
+      body.credentials,
       req.user.uid,
     );
     return result;

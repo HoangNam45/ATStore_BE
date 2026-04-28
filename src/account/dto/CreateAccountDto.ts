@@ -13,11 +13,7 @@ import { Type } from 'class-transformer';
 class AccountCredentialDto {
   @IsString()
   @IsNotEmpty()
-  username: string;
-
-  @IsString()
-  @IsNotEmpty()
-  password: string;
+  credentials: string;
 }
 
 class CategoryDto {

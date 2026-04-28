@@ -556,8 +556,11 @@ export class OrderService {
       }
 
       // TRANSACTION: Update order status and mark accounts as sold atomically
-      let accountCredentials: Array<{ username: string; password: string }> =
-        [];
+      let accountCredentials: Array<{
+        username?: string;
+        password?: string;
+        credentials?: string;
+      }> = [];
 
       await firestore.runTransaction(async (transaction) => {
         // Get and mark accounts as sold within transaction
