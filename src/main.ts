@@ -27,6 +27,7 @@ async function bootstrap() {
     origin: [
       `${process.env.FRONTEND_URL}`,
       'https://aryan-tufaceous-coquettishly.ngrok-free.dev',
+      'https://v0-beverage-shop-website.vercel.app',
       'http://localhost:3000',
     ].filter(Boolean),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

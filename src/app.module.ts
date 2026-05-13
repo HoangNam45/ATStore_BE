@@ -9,6 +9,7 @@ import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountModule } from './account/account.module';
 import { OrderModule } from './order/order.module';
+import { MenuModule } from './menu/menu.module';
 import { TasksModule } from './tasks/tasks.module';
 import { MorganMiddleware } from './common/middleware/logger.middleware';
 
@@ -26,6 +27,7 @@ import { MorganMiddleware } from './common/middleware/logger.middleware';
     AuthModule,
     AccountModule,
     OrderModule,
+    MenuModule,
     TasksModule,
   ],
   controllers: [AppController],
