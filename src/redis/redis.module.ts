@@ -13,7 +13,7 @@ import Redis from 'ioredis';
           port: configService.get<number>('REDIS_PORT') || 6379,
           lazyConnect: false,
           retryStrategy: (times) => {
-            const delay = Math.min(times * 50, 2000);
+            const delay = Math.min(times * 500, 30000);
             return delay;
           },
         });

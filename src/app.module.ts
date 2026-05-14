@@ -11,6 +11,8 @@ import { AccountModule } from './account/account.module';
 import { OrderModule } from './order/order.module';
 import { MenuModule } from './menu/menu.module';
 import { TasksModule } from './tasks/tasks.module';
+import { BlogModule } from './blog/blog.module';
+import { UploadModule } from './upload/upload.module';
 import { MorganMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
@@ -29,6 +31,8 @@ import { MorganMiddleware } from './common/middleware/logger.middleware';
     OrderModule,
     MenuModule,
     TasksModule,
+    BlogModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [
