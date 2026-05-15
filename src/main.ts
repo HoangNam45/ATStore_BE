@@ -29,6 +29,7 @@ async function bootstrap() {
       'https://aryan-tufaceous-coquettishly.ngrok-free.dev',
       'https://v0-beverage-shop-website.vercel.app',
       'http://localhost:3000',
+      'https://thehaf.website',
     ].filter(Boolean),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [

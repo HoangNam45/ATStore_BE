@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import { SkipResponseWrap } from '../common/decorators/skip-response-wrap.decorator';
 import { BlogService } from './blog.service';
@@ -26,8 +27,18 @@ export class BlogController {
 
   @Get()
   @SkipResponseWrap()
-  async getAllBlogs(): Promise<{ data: Blog[] }> {
-    const blogs = await this.blogService.getAllBlogs();
+  async getAllBlogs(@Query('limit') limit?: string): Promise<{ data: Blog[] }> {
+    let parsedLimit: number | undefined;
+
+    if (limit !== undefined) {
+      parsedLimit = Number.parseInt(limit, 10);
+
+      if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
+        throw new BadRequestException('limit must be a positive integer');
+      }
+    }
+
+    const blogs = await this.blogService.getAllBlogs(parsedLimit);
     return { data: blogs };
   }
 

@@ -62,13 +62,18 @@ export class BlogService {
     return this.mapBlog(data);
   }
 
-  async getAllBlogs(): Promise<Blog[]> {
+  async getAllBlogs(limit?: number): Promise<Blog[]> {
     const firestore = this.firebaseService.getFirestore();
-    const snapshot = await firestore
+    let query = firestore
       .collection('blogs')
       .where('published', '==', true)
-      .orderBy('createdAt', 'desc')
-      .get();
+      .orderBy('createdAt', 'desc');
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const snapshot = await query.get();
 
     const blogs: Blog[] = [];
     snapshot.forEach((doc) => {

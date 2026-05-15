@@ -62,6 +62,10 @@ Create a new blog post.
 
 Fetch all published blogs ordered by createdAt (newest first).
 
+#### Query Parameters
+
+- `limit` (number, optional): Limit the number of returned blogs. Use `limit=3` to fetch the 3 latest posts.
+
 #### Response (200 OK)
 
 ```json
@@ -249,6 +253,12 @@ curl -X POST http://localhost:3000/api/blogs \
 
 ```bash
 curl -X GET http://localhost:3000/api/blogs
+```
+
+### 2a. Get the 3 latest blogs
+
+```bash
+curl -X GET "http://localhost:3000/api/blogs?limit=3"
 ```
 
 ### 3. Get a specific blog by slug
